@@ -37,6 +37,7 @@ build/
 
 ### Local env ###
 .env.local
+docker-compose.local-auth.yml
 
 ### Nested repositories ###
 /mobile/
