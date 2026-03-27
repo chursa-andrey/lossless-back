@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS users (
+  id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  email        VARCHAR(320) NOT NULL,
+  display_name VARCHAR(100) NOT NULL,
+  created_at   TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  version      BIGINT       NOT NULL DEFAULT 0
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email ON users (email);

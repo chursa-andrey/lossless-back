@@ -1,0 +1,17 @@
+spring:
+  config:
+    import: optional:file:.env.local[.properties]
+  profiles:
+    default: postgres
+
+auth:
+  jwt:
+    issuer: ${AUTH_JWT_ISSUER:lossless-api}
+    secret: ${AUTH_JWT_SECRET}
+    access-ttl-minutes: ${AUTH_ACCESS_TTL_MINUTES:15}
+    refresh-ttl-days: ${AUTH_REFRESH_TTL_DAYS:30}
+
+app:
+  security:
+    cors:
+      allowed-origins: []
