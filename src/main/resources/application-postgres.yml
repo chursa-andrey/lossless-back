@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5434/appdb?options=-c%20TimeZone=UTC
-    username: app
-    password: 12345
+    url: jdbc:postgresql://localhost:${POSTGRES_PORT:5434}/appdb?options=-c%20TimeZone=UTC
+    username: ${POSTGRES_USER:app}
+    password: ${POSTGRES_PASSWORD:local-dev-password}
     driver-class-name: org.postgresql.Driver
 
   jpa:
