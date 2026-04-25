@@ -3,9 +3,11 @@ package fm.lossless.auth.service;
 import fm.lossless.auth.exception.DefaultRoleNotConfiguredException;
 import fm.lossless.auth.exception.EmailAlreadyInUseException;
 import fm.lossless.auth.exception.InvalidCredentialsException;
+import fm.lossless.auth.exception.PasswordLoginNotAvailableException;
 import fm.lossless.auth.domain.UserPasswordCredential;
 import fm.lossless.auth.repo.UserPasswordCredentialRepository;
 import fm.lossless.auth.web.dto.AuthResponse;
+import fm.lossless.auth.web.dto.ContinueAuthRequest;
 import fm.lossless.auth.web.dto.LoginRequest;
 import fm.lossless.auth.web.dto.RegisterRequest;
 import fm.lossless.auth.web.dto.TokenPairResponse;
@@ -51,21 +53,7 @@ public class AuthService {
             throw new EmailAlreadyInUseException();
         }
 
-        User user = User.create(normalizedEmail, request.displayName());
-        user.addRole(loadDefaultUserRole());
-        User savedUser;
-        try {
-            savedUser = userRepository.saveAndFlush(user);
-        } catch (DataIntegrityViolationException ex) {
-            // Handles race condition when two requests register the same email concurrently.
-            throw new EmailAlreadyInUseException();
-        }
-
-        String passwordHash = passwordEncoder.encode(request.password());
-        UserPasswordCredential credential = UserPasswordCredential.create(savedUser, passwordHash);
-        userPasswordCredentialRepository.save(credential);
-
-        return issueTokens(savedUser);
+        return createUserWithPassword(normalizedEmail, request.password(), request.displayName());
     }
 
     @Transactional
@@ -74,14 +62,15 @@ public class AuthService {
         User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(InvalidCredentialsException::new);
 
-        UserPasswordCredential credential = userPasswordCredentialRepository.findById(user.getId())
-                .orElseThrow(InvalidCredentialsException::new);
+        return authenticateExistingUser(user, request.password());
+    }
 
-        if (!passwordEncoder.matches(request.password(), credential.getPasswordHash())) {
-            throw new InvalidCredentialsException();
-        }
-
-        return issueTokens(user);
+    @Transactional
+    public AuthResponse continueWithEmail(ContinueAuthRequest request) {
+        String normalizedEmail = User.normalizeEmail(request.email());
+        return userRepository.findByEmail(normalizedEmail)
+                .map(user -> authenticateExistingUser(user, request.password()))
+                .orElseGet(() -> createOrResolveRacingUser(normalizedEmail, request.password(), request.displayName()));
     }
 
     public TokenPairResponse refresh(String refreshToken) {
@@ -95,6 +84,45 @@ public class AuthService {
     private AuthResponse issueTokens(User user) {
         TokenPairResponse tokenPair = refreshTokenService.issueForUser(user);
         return new AuthResponse(tokenPair.accessToken(), tokenPair.refreshToken(), UserDto.from(user));
+    }
+
+    private AuthResponse createOrResolveRacingUser(String normalizedEmail, String password, String displayName) {
+        try {
+            return createUserWithPassword(normalizedEmail, password, displayName);
+        } catch (EmailAlreadyInUseException ex) {
+            User existingUser = userRepository.findByEmail(normalizedEmail)
+                    .orElseThrow(InvalidCredentialsException::new);
+            return authenticateExistingUser(existingUser, password);
+        }
+    }
+
+    private AuthResponse createUserWithPassword(String normalizedEmail, String rawPassword, String displayName) {
+        User user = User.create(normalizedEmail, displayName);
+        user.addRole(loadDefaultUserRole());
+        User savedUser;
+        try {
+            savedUser = userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException ex) {
+            // Handles race condition when two requests register the same email concurrently.
+            throw new EmailAlreadyInUseException();
+        }
+
+        String passwordHash = passwordEncoder.encode(rawPassword);
+        UserPasswordCredential credential = UserPasswordCredential.create(savedUser, passwordHash);
+        userPasswordCredentialRepository.save(credential);
+
+        return issueTokens(savedUser);
+    }
+
+    private AuthResponse authenticateExistingUser(User user, String rawPassword) {
+        UserPasswordCredential credential = userPasswordCredentialRepository.findById(user.getId())
+                .orElseThrow(PasswordLoginNotAvailableException::new);
+
+        if (!passwordEncoder.matches(rawPassword, credential.getPasswordHash())) {
+            throw new InvalidCredentialsException();
+        }
+
+        return issueTokens(user);
     }
 
     private Role loadDefaultUserRole() {

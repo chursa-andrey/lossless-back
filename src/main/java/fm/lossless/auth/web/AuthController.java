@@ -3,6 +3,7 @@ package fm.lossless.auth.web;
 import fm.lossless.auth.service.AuthService;
 import fm.lossless.auth.service.SocialAuthService;
 import fm.lossless.auth.web.dto.AuthResponse;
+import fm.lossless.auth.web.dto.ContinueAuthRequest;
 import fm.lossless.auth.web.dto.LoginRequest;
 import fm.lossless.auth.web.dto.RefreshRequest;
 import fm.lossless.auth.web.dto.RegisterRequest;
@@ -38,6 +39,11 @@ public class AuthController {
         return ResponseEntity.ok(authService.login(request));
     }
 
+    @PostMapping("/continue")
+    public ResponseEntity<AuthResponse> continueWithEmail(@Valid @RequestBody ContinueAuthRequest request) {
+        return ResponseEntity.ok(authService.continueWithEmail(request));
+    }
+
     @PostMapping("/refresh")
     public ResponseEntity<TokenPairResponse> refresh(@Valid @RequestBody RefreshRequest request) {
         return ResponseEntity.ok(authService.refresh(request.refreshToken()));
@@ -54,6 +60,6 @@ public class AuthController {
             @PathVariable String provider,
             @Valid @RequestBody SocialAuthRequest request
     ) {
-        return ResponseEntity.ok(socialAuthService.loginWithProvider(provider, request.providerToken()));
+        return ResponseEntity.ok(socialAuthService.loginWithProvider(provider, request));
     }
 }

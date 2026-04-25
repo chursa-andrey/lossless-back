@@ -10,6 +10,14 @@ auth:
     secret: ${AUTH_JWT_SECRET}
     access-ttl-minutes: ${AUTH_ACCESS_TTL_MINUTES:15}
     refresh-ttl-days: ${AUTH_REFRESH_TTL_DAYS:30}
+  social:
+    google:
+      client-ids: ${AUTH_GOOGLE_CLIENT_IDS:}
+    apple:
+      client-ids: ${AUTH_APPLE_CLIENT_IDS:}
+    facebook:
+      app-id: ${AUTH_FACEBOOK_APP_ID:}
+      app-secret: ${AUTH_FACEBOOK_APP_SECRET:}
 
 app:
   security:

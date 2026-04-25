@@ -1,6 +1,7 @@
 package fm.lossless.auth.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import fm.lossless.auth.exception.AuthErrorCode;
 import fm.lossless.auth.web.dto.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,6 +33,10 @@ public class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         objectMapper.writeValue(response.getOutputStream(),
-                ApiErrorResponse.of(HttpStatus.UNAUTHORIZED, request.getRequestURI()));
+                ApiErrorResponse.of(
+                        HttpStatus.UNAUTHORIZED,
+                        AuthErrorCode.AUTHENTICATION_REQUIRED,
+                        request.getRequestURI()
+                ));
     }
 }
