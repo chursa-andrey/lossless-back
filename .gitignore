@@ -39,6 +39,10 @@ build/
 .env.local
 docker-compose.local-auth.yml
 
+### Local uploaded files ###
+/storage/*
+!/storage/.gitkeep
+
 ### Nested repositories ###
 /mobile/
 

@@ -3,6 +3,10 @@ spring:
     import: optional:file:.env.local[.properties]
   profiles:
     default: postgres
+  servlet:
+    multipart:
+      max-file-size: ${SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE:512MB}
+      max-request-size: ${SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE:520MB}
 
 auth:
   jwt:
@@ -23,3 +27,11 @@ app:
   security:
     cors:
       allowed-origins: []
+  storage:
+    local:
+      root-path: ${APP_STORAGE_LOCAL_ROOT_PATH:./storage}
+  tracks:
+    upload:
+      max-file-size: ${APP_TRACKS_UPLOAD_MAX_FILE_SIZE:500MB}
+      allowed-extensions: ${APP_TRACKS_UPLOAD_ALLOWED_EXTENSIONS:wav,flac}
+      max-purchase-links: ${APP_TRACKS_UPLOAD_MAX_PURCHASE_LINKS:10}

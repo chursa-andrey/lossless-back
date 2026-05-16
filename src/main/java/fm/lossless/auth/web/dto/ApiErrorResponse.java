@@ -13,6 +13,10 @@ public record ApiErrorResponse(
         String path
 ) {
     public static ApiErrorResponse of(HttpStatus status, AuthErrorCode code, String path) {
-        return new ApiErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), code.name(), path);
+        return of(status, code.name(), path);
+    }
+
+    public static ApiErrorResponse of(HttpStatus status, String code, String path) {
+        return new ApiErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), code, path);
     }
 }
