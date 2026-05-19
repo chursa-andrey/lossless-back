@@ -6,5 +6,7 @@ public interface TrackStorageService {
 
     StoredTrackFile store(MultipartFile file, String extension);
 
+    StoredTrackResource load(String storageKey);
+
     void delete(String storageKey);
 }

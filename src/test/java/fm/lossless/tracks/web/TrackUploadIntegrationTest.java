@@ -14,6 +14,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -32,6 +33,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "auth.jwt.issuer=test-issuer",
         "auth.jwt.secret=test-test-test-test-test-test-test-test",
         "app.storage.local.root-path=target/test-track-storage",
+        "app.tracks.feed.default-page-size=2",
+        "app.tracks.feed.max-page-size=3",
         "app.tracks.upload.max-file-size=10MB"
 })
 class TrackUploadIntegrationTest {
@@ -60,6 +63,13 @@ class TrackUploadIntegrationTest {
     @Test
     void genresRequireAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/tracks/genres"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+    }
+
+    @Test
+    void feedRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/tracks"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
     }
@@ -152,6 +162,73 @@ class TrackUploadIntegrationTest {
         assertThat(audioFileCountAfterDelete).isZero();
     }
 
+    @Test
+    void feedReturnsNewestTracksFirstWithUploaderAndPlaybackUrl() throws Exception {
+        deleteTracks();
+        String accessToken = registerAndGetAccessToken("track-feed-owner@example.com", "Feed Owner");
+
+        Long firstTrackId = uploadTrack(accessToken, "First Track");
+        Long secondTrackId = uploadTrack(accessToken, "Second Track");
+        Long thirdTrackId = uploadTrack(accessToken, "Third Track");
+
+        String firstPage = mockMvc.perform(get("/api/v1/tracks")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(2)))
+                .andExpect(jsonPath("$.items[0].id").value(thirdTrackId))
+                .andExpect(jsonPath("$.items[0].title").value("Third Track"))
+                .andExpect(jsonPath("$.items[0].genre.slug").value("rock"))
+                .andExpect(jsonPath("$.items[0].uploadedBy.displayName").value("Feed Owner"))
+                .andExpect(jsonPath("$.items[0].uploadedBy.email").doesNotExist())
+                .andExpect(jsonPath("$.items[0].audioUrl").value("/api/v1/tracks/" + thirdTrackId + "/audio"))
+                .andExpect(jsonPath("$.items[0].audio.extension").value("wav"))
+                .andExpect(jsonPath("$.items[0].purchaseLinks[0].url").value("https://example.com/first"))
+                .andExpect(jsonPath("$.items[1].id").value(secondTrackId))
+                .andExpect(jsonPath("$.hasMore").value(true))
+                .andExpect(jsonPath("$.nextCursor.id").value(secondTrackId))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String cursorCreatedAt = objectMapper.readTree(firstPage).path("nextCursor").path("createdAt").asText();
+        String cursorId = objectMapper.readTree(firstPage).path("nextCursor").path("id").asText();
+
+        mockMvc.perform(get("/api/v1/tracks")
+                        .param("cursorCreatedAt", cursorCreatedAt)
+                        .param("cursorId", cursorId)
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].id").value(firstTrackId))
+                .andExpect(jsonPath("$.hasMore").value(false))
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
+    }
+
+    @Test
+    void feedRejectsIncompleteCursor() throws Exception {
+        String accessToken = registerAndGetAccessToken("track-feed-cursor@example.com");
+
+        mockMvc.perform(get("/api/v1/tracks")
+                        .param("cursorId", "1")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("TRACK_FEED_CURSOR_INVALID"));
+    }
+
+    @Test
+    void trackAudioReturnsStoredFile() throws Exception {
+        String accessToken = registerAndGetAccessToken("track-audio-playback@example.com");
+        Long trackId = uploadTrack(accessToken, "Playable Track");
+
+        byte[] response = mockMvc.perform(get("/api/v1/tracks/{trackId}/audio", trackId)
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+
+        assertThat(response).startsWith(new byte[]{'R', 'I', 'F', 'F'});
+    }
 
     @Test
     void uploadRejectsUnknownGenreWithStableCode() throws Exception {
@@ -166,13 +243,17 @@ class TrackUploadIntegrationTest {
     }
 
     private String registerAndGetAccessToken(String email) throws Exception {
+        return registerAndGetAccessToken(email, "Track User");
+    }
+
+    private String registerAndGetAccessToken(String email, String displayName) throws Exception {
         String registerBody = """
                 {
                   "email": "%s",
                   "password": "Passw0rd!",
-                  "displayName": "Track User"
+                  "displayName": "%s"
                 }
-                """.formatted(email);
+                """.formatted(email, displayName);
 
         String response = mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -183,6 +264,25 @@ class TrackUploadIntegrationTest {
                 .getContentAsString();
 
         return objectMapper.readTree(response).path("accessToken").asText();
+    }
+
+    private Long uploadTrack(String accessToken, String title) throws Exception {
+        String response = mockMvc.perform(multipart("/api/v1/tracks/upload")
+                        .file(validWavFile())
+                        .param("genre", "rock")
+                        .param("title", title)
+                        .param("purchaseLinks[]", "https://example.com/first")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        return objectMapper.readTree(response).path("trackId").asLong();
+    }
+
+    private void deleteTracks() {
+        jdbcTemplate.update("delete from tracks");
     }
 
     private MockMultipartFile validWavFile() {

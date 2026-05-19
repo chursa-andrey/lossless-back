@@ -31,6 +31,9 @@ app:
     local:
       root-path: ${APP_STORAGE_LOCAL_ROOT_PATH:./storage}
   tracks:
+    feed:
+      default-page-size: ${APP_TRACKS_FEED_DEFAULT_PAGE_SIZE:10}
+      max-page-size: ${APP_TRACKS_FEED_MAX_PAGE_SIZE:50}
     upload:
       max-file-size: ${APP_TRACKS_UPLOAD_MAX_FILE_SIZE:500MB}
       allowed-extensions: ${APP_TRACKS_UPLOAD_ALLOWED_EXTENSIONS:wav,flac}

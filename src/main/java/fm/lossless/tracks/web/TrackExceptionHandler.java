@@ -2,6 +2,7 @@ package fm.lossless.tracks.web;
 
 import fm.lossless.auth.web.dto.ApiErrorResponse;
 import fm.lossless.tracks.exception.TrackErrorCode;
+import fm.lossless.tracks.exception.TrackException;
 import fm.lossless.tracks.exception.TrackUploadException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -15,6 +16,11 @@ import org.springframework.web.multipart.support.MissingServletRequestPartExcept
 
 @RestControllerAdvice
 public class TrackExceptionHandler {
+
+    @ExceptionHandler(TrackException.class)
+    public ResponseEntity<ApiErrorResponse> handleTrack(TrackException ex, HttpServletRequest request) {
+        return error(ex.getStatus(), ex.getCode(), request);
+    }
 
     @ExceptionHandler(TrackUploadException.class)
     public ResponseEntity<ApiErrorResponse> handleTrackUpload(TrackUploadException ex, HttpServletRequest request) {

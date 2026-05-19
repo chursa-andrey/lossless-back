@@ -156,4 +156,52 @@ public class TrackAudioFile {
     public String getStorageKey() {
         return storageKey;
     }
+
+    public String getOriginalFilename() {
+        return originalFilename;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public String getArtistName() {
+        return artistName;
+    }
+
+    public String getAlbumTitle() {
+        return albumTitle;
+    }
+
+    public String getExtension() {
+        return extension;
+    }
+
+    public String getEmbeddedGenre() {
+        return embeddedGenre;
+    }
+
+    public Long getSizeBytes() {
+        return sizeBytes;
+    }
+
+    public Integer getDurationSeconds() {
+        return durationSeconds;
+    }
+
+    public Integer getSampleRateHz() {
+        return sampleRateHz;
+    }
+
+    public Integer getBitDepth() {
+        return bitDepth;
+    }
+
+    public Integer getChannels() {
+        return channels;
+    }
+
+    public Integer getBitrateKbps() {
+        return bitrateKbps;
+    }
 }

@@ -1,10 +1,12 @@
 package fm.lossless.tracks.storage;
 
 import fm.lossless.tracks.config.StorageProperties;
+import fm.lossless.tracks.exception.TrackException;
 import fm.lossless.tracks.exception.TrackErrorCode;
 import fm.lossless.tracks.exception.TrackUploadException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -70,23 +72,41 @@ public class LocalTrackStorageService implements TrackStorageService {
     }
 
     @Override
+    public StoredTrackResource load(String storageKey) {
+        Path target = resolveStorageKey(storageKey);
+        if (!Files.exists(target) || !Files.isRegularFile(target)) {
+            throw new TrackException(HttpStatus.NOT_FOUND, TrackErrorCode.TRACK_AUDIO_NOT_FOUND);
+        }
+
+        try {
+            return new StoredTrackResource(new FileSystemResource(target), Files.size(target));
+        } catch (IOException ex) {
+            throw new TrackException(HttpStatus.INTERNAL_SERVER_ERROR, TrackErrorCode.TRACK_STORAGE_FAILED, ex);
+        }
+    }
+
+    @Override
     public void delete(String storageKey) {
         if (storageKey == null || storageKey.isBlank()) {
             return;
         }
 
-        Path rootPath = storageProperties.getRootPath().toAbsolutePath().normalize();
-        Path target = rootPath.resolve(storageKey).normalize();
-        if (!target.startsWith(rootPath)) {
-            log.warn("refusing to delete track file outside storage root");
-            return;
-        }
+        Path target = resolveStorageKey(storageKey);
 
         try {
             Files.deleteIfExists(target);
         } catch (IOException ex) {
             log.warn("failed to delete stored track file {}", storageKey, ex);
         }
+    }
+
+    private Path resolveStorageKey(String storageKey) {
+        Path rootPath = storageProperties.getRootPath().toAbsolutePath().normalize();
+        Path target = rootPath.resolve(storageKey).normalize();
+        if (!target.startsWith(rootPath)) {
+            throw new TrackException(HttpStatus.INTERNAL_SERVER_ERROR, TrackErrorCode.TRACK_STORAGE_FAILED);
+        }
+        return target;
     }
 
     private String buildStorageKey(String extension) {
