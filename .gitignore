@@ -36,12 +36,64 @@ build/
 .vscode/
 
 ### Local env ###
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+*.secrets
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
 .env.local
 docker-compose.local-auth.yml
 
 ### Local uploaded files ###
 /storage/*
 !/storage/.gitkeep
+
+### Logs / dumps ###
+*.log
+logs/
+*.dump
+*.hprof
+hs_err_pid*
+replay_pid*
+
+### OS / temp ###
+Thumbs.db
+desktop.ini
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+### Local DB / generated data ###
+*.db
+*.sqlite
+*.sqlite3
+/data/
+/uploads/
+
+### Local runtime artifacts ###
+/run/
+/tmp/
+
+### Private startup material ###
+/notes/
+/research/
+/pitch/
+/business/
+/legal/
+/private/
+/secrets/
+
+### Accidental local files ###
+/C
+/nul
 
 ### Nested repositories ###
 /mobile/
