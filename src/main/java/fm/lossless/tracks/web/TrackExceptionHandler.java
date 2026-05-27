@@ -3,27 +3,25 @@ package fm.lossless.tracks.web;
 import fm.lossless.auth.web.dto.ApiErrorResponse;
 import fm.lossless.tracks.exception.TrackErrorCode;
 import fm.lossless.tracks.exception.TrackException;
-import fm.lossless.tracks.exception.TrackUploadException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 @RestControllerAdvice
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class TrackExceptionHandler {
 
     @ExceptionHandler(TrackException.class)
     public ResponseEntity<ApiErrorResponse> handleTrack(TrackException ex, HttpServletRequest request) {
-        return error(ex.getStatus(), ex.getCode(), request);
-    }
-
-    @ExceptionHandler(TrackUploadException.class)
-    public ResponseEntity<ApiErrorResponse> handleTrackUpload(TrackUploadException ex, HttpServletRequest request) {
         return error(ex.getStatus(), ex.getCode(), request);
     }
 
@@ -52,6 +50,19 @@ public class TrackExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiErrorResponse> handleMaxUploadSize(HttpServletRequest request) {
         return error(HttpStatus.PAYLOAD_TOO_LARGE, TrackErrorCode.TRACK_FILE_TOO_LARGE, request);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex,
+            HttpServletRequest request
+    ) {
+        TrackErrorCode code = switch (ex.getName()) {
+            case "limit" -> TrackErrorCode.TRACK_FEED_LIMIT_INVALID;
+            case "cursorCreatedAt", "cursorId" -> TrackErrorCode.TRACK_FEED_CURSOR_INVALID;
+            default -> TrackErrorCode.TRACK_UPLOAD_FAILED;
+        };
+        return error(HttpStatus.BAD_REQUEST, code, request);
     }
 
     @ExceptionHandler(MultipartException.class)

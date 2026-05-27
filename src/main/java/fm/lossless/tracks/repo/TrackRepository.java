@@ -48,5 +48,5 @@ public interface TrackRepository extends JpaRepository<Track, Long> {
     List<Track> findFeedItemsByIds(@Param("ids") Collection<Long> ids);
 
     @EntityGraph(attributePaths = {"audioFile"})
-    Optional<Track> findWithAudioFileById(Long id);
+    Optional<Track> findWithAudioFileByIdAndStatus(Long id, TrackStatus status);
 }

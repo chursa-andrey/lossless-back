@@ -231,6 +231,46 @@ class TrackUploadIntegrationTest {
     }
 
     @Test
+    void trackAudioSupportsSingleByteRange() throws Exception {
+        String accessToken = registerAndGetAccessToken("track-audio-range@example.com");
+        Long trackId = uploadTrack(accessToken, "Range Track");
+
+        byte[] response = mockMvc.perform(get("/api/v1/tracks/{trackId}/audio", trackId)
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Range", "bytes=0-3"))
+                .andExpect(status().isPartialContent())
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+
+        assertThat(response).containsExactly('R', 'I', 'F', 'F');
+    }
+
+    @Test
+    void trackAudioRejectsInvalidRange() throws Exception {
+        String accessToken = registerAndGetAccessToken("track-audio-invalid-range@example.com");
+        Long trackId = uploadTrack(accessToken, "Invalid Range Track");
+
+        mockMvc.perform(get("/api/v1/tracks/{trackId}/audio", trackId)
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Range", "bytes=100-200"))
+                .andExpect(status().isRequestedRangeNotSatisfiable())
+                .andExpect(jsonPath("$.code").value("TRACK_AUDIO_RANGE_INVALID"));
+    }
+
+    @Test
+    void feedRejectsMalformedCursorTypeWithStableCode() throws Exception {
+        String accessToken = registerAndGetAccessToken("track-feed-malformed-cursor@example.com");
+
+        mockMvc.perform(get("/api/v1/tracks")
+                        .param("cursorCreatedAt", "not-an-instant")
+                        .param("cursorId", "1")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("TRACK_FEED_CURSOR_INVALID"));
+    }
+
+    @Test
     void uploadRejectsUnknownGenreWithStableCode() throws Exception {
         String accessToken = registerAndGetAccessToken("track-bad-genre@example.com");
 

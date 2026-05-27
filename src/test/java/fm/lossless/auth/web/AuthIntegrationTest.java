@@ -147,6 +147,15 @@ class AuthIntegrationTest {
     }
 
     @Test
+    void authRejectsMalformedJsonWithStableCode() throws Exception {
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUEST_INVALID"));
+    }
+
+    @Test
     void logoutRejectsInvalidRequestWithValidationCode() throws Exception {
         String body = """
                 {
@@ -484,6 +493,14 @@ class AuthIntegrationTest {
     @Test
     void meEndpointRejectsMissingToken() throws Exception {
         mockMvc.perform(get("/api/v1/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+    }
+
+    @Test
+    void meEndpointDoesNotAcceptBasicAuth() throws Exception {
+        mockMvc.perform(get("/api/v1/me")
+                        .header("Authorization", "Basic dXNlcjpwYXNz"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
     }

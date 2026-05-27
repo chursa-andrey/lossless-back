@@ -16,9 +16,7 @@ import fm.lossless.users.domain.User;
 import fm.lossless.users.service.CurrentUserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -30,6 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 @Service
 public class TrackUploadService {
@@ -43,6 +42,7 @@ public class TrackUploadService {
     private final TrackRepository trackRepository;
     private final TrackStorageService storageService;
     private final AudioMetadataExtractor metadataExtractor;
+    private final TransactionTemplate transactionTemplate;
 
     public TrackUploadService(
             TrackUploadProperties uploadProperties,
@@ -50,7 +50,8 @@ public class TrackUploadService {
             GenreRepository genreRepository,
             TrackRepository trackRepository,
             TrackStorageService storageService,
-            AudioMetadataExtractor metadataExtractor
+            AudioMetadataExtractor metadataExtractor,
+            TransactionTemplate transactionTemplate
     ) {
         this.uploadProperties = uploadProperties;
         this.currentUserService = currentUserService;
@@ -58,9 +59,9 @@ public class TrackUploadService {
         this.trackRepository = trackRepository;
         this.storageService = storageService;
         this.metadataExtractor = metadataExtractor;
+        this.transactionTemplate = transactionTemplate;
     }
 
-    @Transactional
     public Long upload(
             AuthPrincipal principal,
             MultipartFile file,
@@ -77,9 +78,25 @@ public class TrackUploadService {
                         TrackErrorCode.TRACK_GENRE_NOT_FOUND));
 
         StoredTrackFile storedFile = storageService.store(file, input.extension());
-        deleteStoredFileOnRollback(storedFile.storageKey());
 
-        AudioMetadata metadata = metadataExtractor.extract(storedFile.metadataSourcePath());
+        try {
+            AudioMetadata metadata = metadataExtractor.extract(storedFile.metadataSourcePath());
+            return Objects.requireNonNull(transactionTemplate.execute(status ->
+                    createTrackRecord(currentUser, genre, input, storedFile, metadata)
+            ));
+        } catch (RuntimeException ex) {
+            storageService.delete(storedFile.storageKey());
+            throw ex;
+        }
+    }
+
+    private Long createTrackRecord(
+            User currentUser,
+            Genre genre,
+            ValidatedUploadInput input,
+            StoredTrackFile storedFile,
+            AudioMetadata metadata
+    ) {
         Track track = Track.create(
                 genre,
                 currentUser,
@@ -339,21 +356,6 @@ public class TrackUploadService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private void deleteStoredFileOnRollback(String storageKey) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            return;
-        }
-
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCompletion(int status) {
-                if (status != STATUS_COMMITTED) {
-                    storageService.delete(storageKey);
-                }
-            }
-        });
     }
 
     private record ValidatedUploadInput(

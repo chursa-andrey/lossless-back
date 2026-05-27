@@ -5,23 +5,32 @@ import fm.lossless.tracks.service.GenreService;
 import fm.lossless.tracks.service.TrackAudioPlayback;
 import fm.lossless.tracks.service.TrackCatalogService;
 import fm.lossless.tracks.service.TrackUploadService;
+import fm.lossless.tracks.exception.TrackErrorCode;
+import fm.lossless.tracks.exception.TrackException;
 import fm.lossless.tracks.web.dto.GenreResponse;
 import fm.lossless.tracks.web.dto.TrackFeedResponse;
 import fm.lossless.tracks.web.dto.UploadTrackResponse;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpRange;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -87,19 +96,31 @@ public class TracksController {
     }
 
     @GetMapping("/{trackId}/audio")
-    public ResponseEntity<Resource> getTrackAudio(@PathVariable Long trackId) {
+    public ResponseEntity<?> getTrackAudio(
+            @PathVariable Long trackId,
+            @RequestHeader HttpHeaders headers
+    ) {
         TrackAudioPlayback playback = trackCatalogService.getAudio(trackId);
         String filename = resolvePlaybackFilename(trackId, playback);
+        HttpHeaders responseHeaders = audioHeaders(playback, filename);
 
-        return ResponseEntity.ok()
-                .contentType(resolveMediaType(playback.extension()))
-                .contentLength(playback.sizeBytes())
-                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
-                        .filename(filename, StandardCharsets.UTF_8)
-                        .build()
-                        .toString())
-                .body(playback.resource());
+        if (headers.getRange().isEmpty()) {
+            responseHeaders.setContentLength(playback.sizeBytes());
+            return ResponseEntity.ok()
+                    .headers(responseHeaders)
+                    .body(playback.resource());
+        }
+
+        ResolvedAudioRange range = resolveSingleRange(headers.getRange(), playback.sizeBytes());
+        responseHeaders.setContentLength(range.length());
+        responseHeaders.set(HttpHeaders.CONTENT_RANGE, "bytes %d-%d/%d".formatted(
+                range.start(),
+                range.end(),
+                playback.sizeBytes()
+        ));
+        return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                .headers(responseHeaders)
+                .body(rangeResource(playback.resource(), range));
     }
 
     private List<String> mergePurchaseLinks(List<String> primary, List<String> secondary) {
@@ -123,10 +144,89 @@ public class TracksController {
         return MediaType.APPLICATION_OCTET_STREAM;
     }
 
+    private HttpHeaders audioHeaders(TrackAudioPlayback playback, String filename) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(resolveMediaType(playback.extension()));
+        headers.set(HttpHeaders.ACCEPT_RANGES, "bytes");
+        headers.setContentDisposition(ContentDisposition.inline()
+                .filename(filename, StandardCharsets.UTF_8)
+                .build());
+        return headers;
+    }
+
+    private ResolvedAudioRange resolveSingleRange(List<HttpRange> ranges, long sizeBytes) {
+        if (ranges.size() != 1 || sizeBytes <= 0) {
+            throw new TrackException(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE, TrackErrorCode.TRACK_AUDIO_RANGE_INVALID);
+        }
+
+        try {
+            HttpRange range = ranges.get(0);
+            long start = range.getRangeStart(sizeBytes);
+            long end = range.getRangeEnd(sizeBytes);
+            long rangeLength = Math.min(end - start + 1, sizeBytes - start);
+
+            if (start < 0 || end < start || rangeLength <= 0) {
+                throw new TrackException(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
+                        TrackErrorCode.TRACK_AUDIO_RANGE_INVALID);
+            }
+
+            return new ResolvedAudioRange(start, start + rangeLength - 1, rangeLength);
+        } catch (IllegalArgumentException ex) {
+            throw new TrackException(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
+                    TrackErrorCode.TRACK_AUDIO_RANGE_INVALID, ex);
+        }
+    }
+
+    private InputStreamResource rangeResource(Resource resource, ResolvedAudioRange range) {
+        try {
+            InputStream input = resource.getInputStream();
+            input.skipNBytes(range.start());
+            return new InputStreamResource(new BoundedInputStream(input, range.length()));
+        } catch (IOException ex) {
+            throw new TrackException(HttpStatus.INTERNAL_SERVER_ERROR, TrackErrorCode.TRACK_STORAGE_FAILED, ex);
+        }
+    }
+
     private String resolvePlaybackFilename(Long trackId, TrackAudioPlayback playback) {
         if (playback.originalFilename() != null && !playback.originalFilename().isBlank()) {
             return playback.originalFilename();
         }
         return "track-" + trackId + "." + playback.extension();
+    }
+
+    private record ResolvedAudioRange(long start, long end, long length) {
+    }
+
+    private static final class BoundedInputStream extends FilterInputStream {
+        private long remaining;
+
+        private BoundedInputStream(InputStream input, long length) {
+            super(input);
+            this.remaining = length;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (remaining <= 0) {
+                return -1;
+            }
+            int value = super.read();
+            if (value != -1) {
+                remaining--;
+            }
+            return value;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            if (remaining <= 0) {
+                return -1;
+            }
+            int read = super.read(buffer, offset, (int) Math.min(length, remaining));
+            if (read != -1) {
+                remaining -= read;
+            }
+            return read;
+        }
     }
 }

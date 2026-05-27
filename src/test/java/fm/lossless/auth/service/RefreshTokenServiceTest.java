@@ -145,6 +145,17 @@ class RefreshTokenServiceTest {
     }
 
     @Test
+    void scheduledCleanupDeletesExpiredTokens() {
+        User user = createUser("scheduled-cleanup@example.com");
+        refreshTokenService.issueForUser(user);
+
+        clock.plus(Duration.ofDays(jwtProperties.getRefreshTtlDays()).plusSeconds(1));
+        refreshTokenService.cleanupExpiredScheduled();
+
+        assertThat(refreshTokenRepository.count()).isZero();
+    }
+
+    @Test
     void concurrentReuseAllowsSingleSuccessfulRefresh() throws Exception {
         User user = createUser("concurrent@example.com");
         TokenPairResponse initial = refreshTokenService.issueForUser(user);

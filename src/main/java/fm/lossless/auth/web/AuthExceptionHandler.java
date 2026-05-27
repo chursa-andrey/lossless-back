@@ -14,18 +14,47 @@ import fm.lossless.auth.exception.SocialEmailRequiredException;
 import fm.lossless.auth.exception.UnsupportedSocialProviderException;
 import fm.lossless.auth.web.dto.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
+@Order(Ordered.LOWEST_PRECEDENCE)
 public class AuthExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthExceptionHandler.class);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidationError(HttpServletRequest request) {
         return error(HttpStatus.BAD_REQUEST, AuthErrorCode.VALIDATION_FAILED, request);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleUnreadableMessage(HttpServletRequest request) {
+        return error(HttpStatus.BAD_REQUEST, AuthErrorCode.REQUEST_INVALID, request);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiErrorResponse> handleResponseStatus(
+            ResponseStatusException ex,
+            HttpServletRequest request
+    ) {
+        HttpStatus status = resolveHttpStatus(ex.getStatusCode());
+        AuthErrorCode code = switch (status) {
+            case UNAUTHORIZED -> AuthErrorCode.AUTHENTICATION_REQUIRED;
+            case FORBIDDEN -> AuthErrorCode.ACCESS_DENIED;
+            default -> AuthErrorCode.REQUEST_INVALID;
+        };
+        return error(status, code, request);
     }
 
     @ExceptionHandler(InvalidCredentialsException.class)
@@ -83,8 +112,20 @@ public class AuthExceptionHandler {
         return error(HttpStatus.NOT_IMPLEMENTED, AuthErrorCode.AUTH_FEATURE_NOT_IMPLEMENTED, request);
     }
 
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception ex, HttpServletRequest request) {
+        log.error("unexpected API error at {}", request.getRequestURI(), ex);
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, AuthErrorCode.INTERNAL_ERROR, request);
+    }
+
     private ResponseEntity<ApiErrorResponse> error(HttpStatus status, AuthErrorCode code, HttpServletRequest request) {
         return ResponseEntity.status(status)
                 .body(ApiErrorResponse.of(status, code, request.getRequestURI()));
+    }
+
+    private HttpStatus resolveHttpStatus(HttpStatusCode statusCode) {
+        return HttpStatus.resolve(statusCode.value()) == null
+                ? HttpStatus.INTERNAL_SERVER_ERROR
+                : HttpStatus.valueOf(statusCode.value());
     }
 }

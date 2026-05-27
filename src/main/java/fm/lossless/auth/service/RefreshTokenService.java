@@ -9,6 +9,7 @@ import fm.lossless.auth.web.dto.TokenPairResponse;
 import fm.lossless.users.domain.Role;
 import fm.lossless.users.domain.User;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -100,6 +101,16 @@ public class RefreshTokenService {
 
     @Transactional
     public long cleanupExpired() {
+        return deleteExpiredTokens();
+    }
+
+    @Scheduled(fixedDelayString = "${auth.jwt.refresh-cleanup-fixed-delay-ms:86400000}")
+    @Transactional
+    public void cleanupExpiredScheduled() {
+        deleteExpiredTokens();
+    }
+
+    private long deleteExpiredTokens() {
         return refreshTokenRepository.deleteByExpiresAtBefore(now());
     }
 

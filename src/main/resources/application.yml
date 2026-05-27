@@ -14,7 +14,11 @@ auth:
     secret: ${AUTH_JWT_SECRET}
     access-ttl-minutes: ${AUTH_ACCESS_TTL_MINUTES:15}
     refresh-ttl-days: ${AUTH_REFRESH_TTL_DAYS:30}
+    refresh-cleanup-fixed-delay-ms: ${AUTH_REFRESH_CLEANUP_FIXED_DELAY_MS:86400000}
   social:
+    http:
+      connect-timeout: ${AUTH_SOCIAL_HTTP_CONNECT_TIMEOUT:3s}
+      read-timeout: ${AUTH_SOCIAL_HTTP_READ_TIMEOUT:5s}
     google:
       client-ids: ${AUTH_GOOGLE_CLIENT_IDS:}
     apple:

@@ -46,5 +46,8 @@ docker-compose.local-auth.yml
 ### Nested repositories ###
 /mobile/
 
+### Local project docs ###
+/docs/
+
 ### Mac OS ###
 .DS_Store

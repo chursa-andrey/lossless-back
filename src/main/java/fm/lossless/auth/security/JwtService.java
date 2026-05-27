@@ -39,7 +39,7 @@ public class JwtService {
         }
         this.key = Keys.hmacShaKeyFor(secretBytes);
 
-        if ( props.getAccessTtlMinutes() <= 0 ) {
+        if (props.getAccessTtlMinutes() <= 0) {
             throw new IllegalArgumentException("Access token TTL must be positive.");
         }
         if (props.getIssuer() == null || props.getIssuer().isBlank()) {
@@ -73,13 +73,19 @@ public class JwtService {
     }
 
     private static List<String> normalizeRoles(List<String> roles) {
-        if (roles == null || roles.isEmpty()) return List.of();
+        if (roles == null || roles.isEmpty()) {
+            return List.of();
+        }
 
         Set<String> out = new LinkedHashSet<>();
         for (String r : roles) {
-            if (r == null) continue;
+            if (r == null) {
+                continue;
+            }
             String s = r.trim();
-            if (s.isEmpty()) continue;
+            if (s.isEmpty()) {
+                continue;
+            }
             out.add(s.toUpperCase(Locale.ROOT));
         }
         return List.copyOf(out);

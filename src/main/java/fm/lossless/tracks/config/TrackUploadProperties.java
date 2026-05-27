@@ -1,8 +1,11 @@
 package fm.lossless.tracks.config;
 
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.util.unit.DataSize;
+import org.springframework.validation.annotation.Validated;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -10,10 +13,16 @@ import java.util.Locale;
 
 @Component
 @ConfigurationProperties(prefix = "app.tracks.upload")
+@Validated
 public class TrackUploadProperties {
 
+    @NotNull
     private DataSize maxFileSize = DataSize.ofMegabytes(500);
+
+    @NotNull
     private List<String> allowedExtensions = new ArrayList<>(List.of("wav", "flac"));
+
+    @Positive
     private int maxPurchaseLinks = 10;
 
     public DataSize getMaxFileSize() {

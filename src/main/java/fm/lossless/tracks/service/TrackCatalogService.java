@@ -78,7 +78,7 @@ public class TrackCatalogService {
 
     @Transactional(readOnly = true)
     public TrackAudioPlayback getAudio(Long trackId) {
-        Track track = trackRepository.findWithAudioFileById(trackId)
+        Track track = trackRepository.findWithAudioFileByIdAndStatus(trackId, TrackStatus.UPLOADED)
                 .orElseThrow(() -> new TrackException(HttpStatus.NOT_FOUND, TrackErrorCode.TRACK_NOT_FOUND));
         TrackAudioFile audioFile = track.getAudioFile();
         if (audioFile == null) {
