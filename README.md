@@ -6,6 +6,12 @@ Java/Spring Boot backend API for Lossless.fm — a mobile-first prototype for up
 
 Prototype / work sample. Core backend functionality is implemented, but the project is not production-ready yet.
 
+## Related Repositories
+
+- Mobile App: `https://github.com/chursa-andrey/lossless-front`
+
+---
+
 ## Features
 
 - Email authentication
